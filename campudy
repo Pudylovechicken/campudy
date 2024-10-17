@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Object Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+        video, canvas {
+            margin-top: 20px;
+            border: 5px solid #333;
+            border-radius: 10px;
+            max-width: 100%;
+        }
+        #detections {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Webcam Object Detection</h1>
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <!-- Bagian untuk menampilkan jumlah objek terdeteksi -->
+    <div id="detections">
+        Human: 0 <br>
+        Cell Phone: 0
+    </div>
+
+    <script>
+        // Akses webcam
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let personCount = 0;
+        let cellPhoneCount = 0;
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        // Set ukuran canvas sesuai dengan video
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+
+                        // Panggil fungsi deteksi objek
+                        detectObjects();
+                    };
+                });
+        } else {
+            alert('Browser Anda tidak mendukung webcam.');
+        }
+
+        // Fungsi deteksi objek menggunakan CocoSSD
+        async function detectObjects() {
+            const model = await cocoSsd.load();
+            console.log("Model loaded.");
+
+            async function detectFrame() {
+                // Reset counter setiap frame baru
+                personCount = 0;
+                cellPhoneCount = 0;
+
+                // Deteksi objek dari frame video
+                const predictions = await model.detect(video);
+
+                // Bersihkan canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Gambar prediksi ke canvas dan hitung objek
+                predictions.forEach(prediction => {
+                    let borderColor = 'green'; // Default untuk objek lain
+
+                    // Tentukan warna border berdasarkan kelas objek
+                    if (prediction.class === 'person') {
+                        borderColor = 'red'; // Warna merah untuk manusia
+                        personCount++; // Tambahkan hitungan manusia
+                    } else if (prediction.class === 'cell phone') {
+                        borderColor = 'blue'; // Warna biru untuk handphone
+                        cellPhoneCount++; // Tambahkan hitungan handphone
+                    }
+
+                    // Gambar kotak deteksi di canvas
+                    ctx.beginPath();
+                    ctx.rect(...prediction.bbox);
+                    ctx.lineWidth = 4; // Tebalkan garis border
+                    ctx.strokeStyle = borderColor;
+                    ctx.stroke();
+
+                    // Tampilkan label objek
+                    ctx.fillStyle = borderColor;
+                    ctx.font = '16px Arial';
+                    ctx.fillText(prediction.class, prediction.bbox[0], prediction.bbox[1] > 10 ? prediction.bbox[1] - 5 : 10);
+                });
+
+                // Panggil deteksi objek untuk frame berikutnya
+                requestAnimationFrame(detectFrame);
+            }
+
+            detectFrame();
+
+            // Perbarui hitungan objek setiap 2 detik
+            setInterval(() => {
+                document.getElementById('detections').innerHTML = `Human: ${personCount} <br> Cell Phone: ${cellPhoneCount}`;
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
